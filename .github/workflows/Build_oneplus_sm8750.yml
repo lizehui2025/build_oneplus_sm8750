@@ -348,6 +348,60 @@ jobs:
           cd common
           git add -A && git commit -a -m "BUILD Kernel"
 
+      - name: ⚡ Apply Local O3 Optimization (应用局部O3优化)
+        run: |
+          cd kernel_workspace/kernel_platform/common
+          
+          # 全局启用O3优化
+          echo "启用全局O3优化..."
+          find . -name "Makefile" -type f -exec sed -i 's/-O2/-O3/g' {} +
+          
+          # 为稳定性关键模块降级为O2优化
+          echo "为关键模块应用O2优化..."
+          
+          # 设备驱动 - 时序敏感性
+          for dir in drivers/base drivers/char drivers/block drivers/mmc drivers/usb; do
+            if [ -d "$dir" ]; then
+              find "$dir" -name "Makefile" -type f -exec sed -i 's/-O3/-O2/g' {} +
+            fi
+          done
+          
+          # 中断和异常处理
+          for dir in kernel/irq arch/arm64/kernel; do
+            if [ -d "$dir" ]; then
+              find "$dir" -name "Makefile" -type f -exec sed -i 's/-O3/-O2/g' {} +
+            fi
+          done
+          
+          # 电源管理和休眠
+          if [ -d "kernel/power" ]; then
+            find kernel/power -name "Makefile" -type f -exec sed -i 's/-O3/-O2/g' {} +
+          fi
+          
+          # 锁和同步原语
+          if [ -d "kernel/locking" ]; then
+            find kernel/locking -name "Makefile" -type f -exec sed -i 's/-O3/-O2/g' {} +
+          fi
+          
+          # 内存管理敏感部分
+          if [ -f "mm/Makefile" ]; then
+            sed -i 's/^CFLAGS_page_alloc\.o = .*/&-O2/' mm/Makefile 2>/dev/null || true
+            sed -i 's/^CFLAGS_slub\.o = .*/&-O2/' mm/Makefile 2>/dev/null || true
+          fi
+          
+          # 为性能关键模块保持O3优化并添加额外优化标志
+          echo "为性能关键模块应用激进优化..."
+          for dir in crypto lib kernel/sched; do
+            if [ -d "$dir" ]; then
+              find "$dir" -name "Makefile" -type f -exec sed -i 's/-O3/-O3 -fno-strict-aliasing/g' {} +
+            fi
+          done
+          
+          echo "局部O3优化配置完成"
+          echo "全局: O3优化"
+          echo "降级为O2: 驱动、中断、电源管理、锁机制"
+          echo "激进O3: 加密、调度器、库函数"
+
       - name: 🔧 Set Kernel name (设置内核名称)
         env:
           KEEP_ORIGINAL: ${{ github.event.inputs.keep_original_settings }}
