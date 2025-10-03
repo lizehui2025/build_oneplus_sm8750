@@ -1,0 +1,189 @@
+name: Build_oneplus_sm8750
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_MANIFEST:
+        description: "📝请选择要编译的机型："
+        required: true
+        type: choice
+        options:
+          - 'oneplus_13'
+          - 'oneplus_ace5_pro'
+          - 'oneplus_13t'
+          - 'oneplus_pad_2_pro'
+          - 'oneplus_ace5_ultra'
+          - 'realme_GT7'
+          - 'realme_GT7pro'
+          - 'realme_GT7pro_Speed'
+        default: 'oneplus_ace5_pro'
+
+      keep_original_settings:
+        description: "📝保持原内核名称及构建时间(不懂请保持默认)"
+        required: false
+        default: true
+        type: boolean
+
+      custom_kernel_suffix:
+        description: "✏️ 自定义内核名称- 仅在取消勾选'保持原设置'时有效(不懂请保持默认)"
+        required: false
+        default: ''
+      
+      custom_kernel_time:
+        description: "⏰ 自定义构建时间- 仅在取消勾选'保持原设置'时有效(不懂请保持默认)"
+        required: false
+        default: ''
+
+      enable_feature_z:
+        description: "添加风驰驱动"
+        required: false
+        default: true
+        type: boolean
+
+      enable_feature_a:
+        description: "开启BBG防格机模块"
+        required: false
+        default: true
+        type: boolean
+
+      enable_feature_b:
+         description: "选择网络调度"
+         required: false
+         type: choice
+         options:
+            - 'FQ_CODEL'
+            - 'BBR'
+         default: 'FQ_CODEL'
+      
+       
+
+
+jobs:
+  build:
+    name: Build_${{ github.event.inputs.REPO_MANIFEST }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: ⚙️ Set REPO_MANIFEST (设置对应机型配置文件)
+        run: |
+          case "${{ github.event.inputs.REPO_MANIFEST }}" in
+            oneplus_ace5_pro)
+              echo "REPO_MANIFEST=JiuGeFaCai_oneplus_ace5_pro_v" >> $GITHUB_ENV
+              echo "DEVICES_NAME=oneplus_ace5_pro" >> $GITHUB_ENV
+              ;;
+            oneplus_13)
+              echo "REPO_MANIFEST=JiuGeFaCai_oneplus_13_v" >> $GITHUB_ENV
+              echo "DEVICES_NAME=oneplus_13" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "REPO_MANIFEST=${{ github.event.inputs.REPO_MANIFEST }}" >> $GITHUB_ENV
+              echo "DEVICES_NAME=${{ github.event.inputs.REPO_MANIFEST }}" >> $GITHUB_ENV
+              ;;
+          esac
+          case "${{ github.event.inputs.REPO_MANIFEST }}" in
+            realme_GT7pro_Speed)
+              echo 'DEFAULT_SUFFIX=-android15-8-g013ec21bba94-abogki383916444-4k' >> $GITHUB_ENV
+              ;;
+            realme_GT7)
+              echo 'DEFAULT_SUFFIX=-android15-8-g06c41a4a6e98-abogki395793266-4k' >> $GITHUB_ENV
+              ;;
+            realme_GT7pro)
+              echo 'DEFAULT_SUFFIX=-android15-8-gc6f5283046c6-ab12364222-4k' >> $GITHUB_ENV
+              ;;
+            oneplus_13t)
+              echo 'DEFAULT_SUFFIX=-android15-8-g29d86c5fc9dd-abogki428889875-4k' >> $GITHUB_ENV
+              ;;
+            oneplus_pad_2_pro)
+              echo 'DEFAULT_SUFFIX=-android15-8-g7b1f455c7143-ab13591283-4k' >> $GITHUB_ENV
+              ;;
+            oneplus_ace5_pro | oneplus_13 | oneplus_ace5_ultra)
+              echo 'DEFAULT_SUFFIX=-android15-8-g29d86c5fc9dd-abogki428889875-4k' >> $GITHUB_ENV
+              ;;
+          esac
+          if [ "${{ github.event.inputs.keep_original_settings }}" = "false" ] && [ -n "${{ github.event.inputs.custom_kernel_suffix }}" ]; then
+            echo "使用自定义构建时间: $CUSTOM_TIME"
+            echo "KERNEL_TIME=$CUSTOM_TIME" >> $GITHUB_ENV
+          else
+            case "${{ github.event.inputs.REPO_MANIFEST }}" in
+              realme_GT7pro_Speed)
+                echo 'KERNEL_TIME=Tue Dec 17 23:36:49 UTC 2024' >> $GITHUB_ENV
+                ;;
+              realme_GT7)
+                echo 'KERNEL_TIME=Mon Jan 20 03:24:58 UTC 2025' >> $GITHUB_ENV
+                ;;
+              realme_GT7pro)
+                echo 'KERNEL_TIME=Fri Sep 13 02:08:57 UTC 2024' >> $GITHUB_ENV
+                ;;
+              oneplus_13t)
+                echo 'KERNEL_TIME=Tue Jul  1 19:48:18 UTC 2025' >> $GITHUB_ENV
+                ;;
+              oneplus_pad_2_pro)
+                echo 'KERNEL_TIME=Tue Jun  3 03:22:33 UTC 2025' >> $GITHUB_ENV
+                ;;
+              oneplus_ace5_pro | oneplus_13 | oneplus_ace5_ultra)
+                echo 'KERNEL_TIME=Tue Jul  1 19:48:18 UTC 2025' >> $GITHUB_ENV
+                ;;
+            esac
+          fi
+          
+      - name: 🚀 Maximize Build Space  (最大化构建空间)
+        if: ${{ contains(fromJson('["oneplus_pad_2_pro","realme_GT7pro","realme_GT7pro_Speed"]'), env.DEVICES_NAME) }}
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 4096
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          
+      - name: ⚙️ Set device-specific CCACHE_DIR (设置对应机型Cceche路径)
+        run: |
+          echo "CCACHE_DIR=$HOME/.ccache_${REPO_MANIFEST}" >> $GITHUB_ENV
+
+      - name: 📦 Configure Git (设置下载账户)
+        run: |
+          git config --global user.name "Q1udaoyu"
+          git config --global user.email "sucisama2888@gmail.com"
+
+      - name: 🛠 Configure APT caching (配置APT缓存)
+        run: |
+          APT_CACHE_DIR="$HOME/apt-cache"
+          mkdir -p "$APT_CACHE_DIR"/{archives,lists/partial}
+          echo "Dir::Cache \"$APT_CACHE_DIR\";" | sudo tee /etc/apt/apt.conf.d/90user-cache
+          echo "Dir::Cache::archives \"$APT_CACHE_DIR/archives\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Dir::State::lists \"$APT_CACHE_DIR/lists\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Acquire::Check-Valid-Until \"false\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Acquire::Languages \"none\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          sudo chown -R $USER:$USER "$APT_CACHE_DIR"
+
+      - name: 🛠 Cache APT packages (缓存APT包)
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.HOME }}/apt-cache
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/Build_oneplus_sm8750.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
+      - name: 📦 Install dependencies (安装依赖)
+        run: |
+          sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock
+          APT_CACHE_DIR="$HOME/apt-cache"
+          mkdir -p "$APT_CACHE_DIR/lists/partial"
+          sudo apt -o Dir::Cache="$APT_CACHE_DIR" update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt -o Dir::Cache="$APT_CACHE_DIR" install -yq --no-install-recommends \
+            python3 p7zip-full git curl ccache libelf-dev \
+            build-essential libelf-dev flex bison libssl-dev \
+            libncurses-dev liblz4-tool zlib1g-dev \
+            libxml2-utils rsync unzip
+          
+          echo "✅ 依赖安装完成"
+          
+      - name: 📥 Restore ccache (载入 机型：${{ env.DEVICES_NAME }}的 ccache 缓存)
+        uses: actions/cache@v3
+        
