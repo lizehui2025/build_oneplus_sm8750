@@ -448,7 +448,140 @@ jobs:
           cd kernel_workspace/kernel_platform/common
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS="-O2 -ftree-vectorize -funroll-loops -Wno-error -mllvm -polly -mllvm -polly-parallel" LTO=full gki_defconfig
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS="-O2 -ftree-vectorize -funroll-loops -Wno-error -mllvm -polly -mllvm -polly-parallel" LTO=full Image
-       
+       # 在 "🔨 Build Kernel (构建内核)" 步骤后添加以下验证步骤
+
+      - name: 🔍 Verify Kernel Optimization (验证内核优化)
+  run: |
+    echo "=== 开始验证内核优化等级 ==="
+    cd kernel_workspace/kernel_platform/common
+    
+    # 1. 检查生成的 vmlinux 文件
+    if [ -f "out/vmlinux" ]; then
+      echo "✅ 找到编译的内核文件: out/vmlinux"
+      ls -lh out/vmlinux
+      
+      # 检查文件类型和基本信息
+      echo -e "\n📁 文件信息:"
+      file out/vmlinux
+      
+      # 检查调试信息
+      echo -e "\n🔍 调试信息检查:"
+      readelf -S out/vmlinux 2>/dev/null | grep -i debug | head -5 || echo "未找到调试段"
+      
+      # 检查符号表大小（优化后应该较小）
+      echo -e "\n📊 符号表统计:"
+      nm out/vmlinux 2>/dev/null | wc -l | xargs echo "符号数量:"
+      size out/vmlinux 2>/dev/null || echo "无法获取文件大小信息"
+      
+    else
+      echo "❌ 未找到 out/vmlinux 文件"
+      exit 1
+    fi
+    
+    # 2. 分析编译日志中的优化标志
+    echo -e "\n📝 编译优化标志分析:"
+    if [ -f "build.log" ]; then
+      echo "找到的优化标志统计:"
+      grep -o " -O[0-9s]" build.log | sort | uniq -c | sort -nr
+      
+      echo -e "\n关键模块编译标志:"
+      for module in "kernel/sched" "mm/" "drivers/"; do
+        echo "=== $module ==="
+        grep -E "($module).* -O" build.log | head -2 | sed 's/^/  /' || echo "  无相关记录"
+      done
+    else
+      echo "未找到 build.log 文件"
+    fi
+    
+    # 3. 检查配置文件中的优化设置
+    echo -e "\n⚙️ 配置文件优化设置:"
+    if [ -f "out/.config" ]; then
+      grep -E "CONFIG_CC_OPTIMIZE|CONFIG_DEBUG_INFO" out/.config || echo "未找到相关配置"
+    else
+      echo "未找到 out/.config 文件"
+    fi
+    
+    # 4. 验证关键性能模块
+    echo -e "\n🚀 性能关键模块验证:"
+    for obj in "kernel/sched/core.o" "mm/page_alloc.o" "kernel/irq/handle.o"; do
+      if [ -f "out/$obj" ]; then
+        size="$(stat -c%s "out/$obj" 2>/dev/null || echo "未知")"
+        echo "  $obj: $size 字节"
+      fi
+    done
+    
+    echo -e "\n✅ 内核优化验证完成"
+    echo "================================="
+
+      - name: 📊 Optimization Summary Report (优化总结报告)
+  run: |
+    echo "=== 内核优化总结报告 ==="
+    cd kernel_workspace/kernel_platform/common
+    
+    # 生成优化报告
+    {
+      echo "## 编译优化验证结果"
+      echo ""
+      echo "### 文件信息"
+      echo "- 内核文件: \`out/vmlinux\`"
+      if [ -f "out/vmlinux" ]; then
+        echo "- 文件大小: $(ls -lh out/vmlinux | awk '{print $5}')"
+        echo "- 架构: $(file out/vmlinux | cut -d: -f2 | xargs)"
+      fi
+      
+      echo ""
+      echo "### 优化配置"
+      if [ -f "out/.config" ]; then
+        optimize_config=$(grep "CONFIG_CC_OPTIMIZE" out/.config || echo "未设置")
+        debug_config=$(grep "CONFIG_DEBUG_INFO" out/.config || echo "未设置")
+        echo "- 优化级别配置: $optimize_config"
+        echo "- 调试信息: $debug_config"
+      fi
+      
+      echo ""
+      echo "### 编译标志统计"
+      if [ -f "build.log" ]; then
+        echo "| 优化级别 | 使用次数 |"
+        echo "|----------|----------|"
+        grep -o " -O[0-9s]" build.log | sort | uniq -c | while read count flag; do
+          echo "| $flag | $count |"
+        done
+      else
+        echo "无编译日志数据"
+      fi
+      
+      echo ""
+      echo "### 验证结果"
+      if [ -f "out/vmlinux" ]; then
+        debug_sections=$(readelf -S out/vmlinux 2>/dev/null | grep -c debug || echo "0")
+        if [ "$debug_sections" -eq 0 ]; then
+          echo "✅ 调试信息已优化移除"
+        else
+          echo "⚠️ 发现 $debug_sections 个调试段"
+        fi
+        
+        # 检查关键文件是否存在
+        if [ -f "out/kernel/sched/core.o" ]; then
+          echo "✅ 调度器模块编译成功"
+        fi
+        if [ -f "out/mm/page_alloc.o" ]; then
+          echo "✅ 内存管理模块编译成功"
+        fi
+      fi
+      
+      echo ""
+      echo "---"
+      echo "*生成时间: $(date)*"
+    } > optimization_report.md
+    
+    cat optimization_report.md
+
+      - name: 📁 Upload Optimization Report (上传优化报告)
+  uses: actions/upload-artifact@v4
+  with:
+    name: Optimization-Report-${{ env.DEVICES_NAME }}
+    path: kernel_workspace/kernel_platform/common/optimization_report.md
+
       - name: 📦 Make AnyKernel3 (创建Anykernel3)
         run: |
           cp "${GITHUB_WORKSPACE}/.github/workflows/Bin/main.bin" ./
