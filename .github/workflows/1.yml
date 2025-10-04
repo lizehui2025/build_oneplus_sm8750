@@ -325,74 +325,7 @@ jobs:
             
             echo "完成"
 
-      - name: 🔧 Apply global optimization patches (应用全局优化补丁)
-        env:
-          ENABLE_GLOBAL_O3: ${{ inputs.enable_global_o3 }}
-          ENABLE_GRAPHITE: ${{ inputs.enable_graphite_optimizations }}
-        run: |
-          cd kernel_workspace/kernel_platform/common
-          
-          # 备份原Makefile
-          cp Makefile Makefile.backup
-          
-          if [ "$ENABLE_GLOBAL_O3" = "true" ]; then
-            echo "应用全局O3优化..."
-            
-            # 修改顶层Makefile使用O3优化
-            sed -i 's/-O2/-O3/g' Makefile
-            
-            # 为不适合O3的组件单独设置O2优化级别
-            # 这些组件通常包含复杂的内联汇编或对优化敏感
-            
-            # 创建排除列表的配置
-            cat > o3_exclusions.cfg << 'EOF'
-            # 不适用O3优化的组件列表
-            # 这些组件使用O2优化以保证稳定性
-            
-            # 内存管理核心组件 (对优化敏感)
-            KBUILD_CFLAGS_mm/ += -O2
-            KBUILD_CFLAGS_mm/zsmalloc.o += -O2
-            KBUILD_CFLAGS_mm/zpool.o += -O2
-            
-            # 特定架构代码 (包含复杂汇编)
-            KBUILD_CFLAGS_arch/arm64/crypto/ += -O2
-            KBUILD_CFLAGS_arch/arm64/kernel/ += -O2
-            
-            # 加密组件 (安全性关键)
-            KBUILD_CFLAGS_crypto/ += -O2
-            
-            # 特定驱动 (已知问题)
-            KBUILD_CFLAGS_drivers/gpu/ += -O2
-            KBUILD_CFLAGS_drivers/media/ += -O2
-            KBUILD_CFLAGS_drivers/video/ += -O2
-            
-            # 网络核心 (稳定性关键)
-            KBUILD_CFLAGS_net/core/ += -O2
-            KBUILD_CFLAGS_net/ipv4/ += -O2
-            KBUILD_CFLAGS_net/ipv6/ += -O2
-            
-            # 文件系统核心
-            KBUILD_CFLAGS_fs/ext4/ += -O2
-            KBUILD_CFLAGS_fs/f2fs/ += -O2
-            
-            # 调度器核心 (稳定性关键)
-            KBUILD_CFLAGS_kernel/sched/ += -O2
-            EOF
-            
-            # 应用排除配置到Makefile
-            cat o3_exclusions.cfg >> Makefile
-            
-            echo "全局O3优化已应用，特定组件使用O2"
-          else
-            echo "使用默认O2优化"
-          fi
-          
-          if [ "$ENABLE_GRAPHITE" = "true" ]; then
-            echo "启用Graphite优化..."
-            # 添加Graphite优化标志
-            sed -i '/^KBUILD_CFLAGS\s*+=/a KBUILD_CFLAGS += -fgraphite-identity -floop-nest-optimize -floop-parallelize-all -ftree-parallelize-loops=4' Makefile
-            echo "Graphite优化已启用"
-          fi
+
 
       - name: 🔧 Cache HMBird patch (缓存HMBird补丁)
         uses: actions/cache@v3
@@ -466,7 +399,75 @@ jobs:
          cp -r ./sched_ext/* ./common/kernel/sched
          rm -rf ./sched_ext/.git
          cd common/kernel/sched  
+      
+      - name: 🔧 Apply global optimization patches (应用全局优化补丁)
+        env:
+          ENABLE_GLOBAL_O3: ${{ inputs.enable_global_o3 }}
+          ENABLE_GRAPHITE: ${{ inputs.enable_graphite_optimizations }}
+        run: |
+          cd kernel_workspace/kernel_platform/common
           
+          # 备份原Makefile
+          cp Makefile Makefile.backup
+          
+          if [ "$ENABLE_GLOBAL_O3" = "true" ]; then
+            echo "应用全局O3优化..."
+            
+            # 修改顶层Makefile使用O3优化
+            sed -i 's/-O2/-O3/g' Makefile
+            
+            # 为不适合O3的组件单独设置O2优化级别
+            # 这些组件通常包含复杂的内联汇编或对优化敏感
+            
+            # 创建排除列表的配置
+            cat > o3_exclusions.cfg << 'EOF'
+            # 不适用O3优化的组件列表
+            # 这些组件使用O2优化以保证稳定性
+            
+            # 内存管理核心组件 (对优化敏感)
+            KBUILD_CFLAGS_mm/ += -O2
+            KBUILD_CFLAGS_mm/zsmalloc.o += -O2
+            KBUILD_CFLAGS_mm/zpool.o += -O2
+            
+            # 特定架构代码 (包含复杂汇编)
+            KBUILD_CFLAGS_arch/arm64/crypto/ += -O2
+            KBUILD_CFLAGS_arch/arm64/kernel/ += -O2
+            
+            # 加密组件 (安全性关键)
+            KBUILD_CFLAGS_crypto/ += -O2
+            
+            # 特定驱动 (已知问题)
+            KBUILD_CFLAGS_drivers/gpu/ += -O2
+            KBUILD_CFLAGS_drivers/media/ += -O2
+            KBUILD_CFLAGS_drivers/video/ += -O2
+            
+            # 网络核心 (稳定性关键)
+            KBUILD_CFLAGS_net/core/ += -O2
+            KBUILD_CFLAGS_net/ipv4/ += -O2
+            KBUILD_CFLAGS_net/ipv6/ += -O2
+            
+            # 文件系统核心
+            KBUILD_CFLAGS_fs/ext4/ += -O2
+            KBUILD_CFLAGS_fs/f2fs/ += -O2
+            
+            # 调度器核心 (稳定性关键)
+            KBUILD_CFLAGS_kernel/sched/ += -O2
+            EOF
+            
+            # 应用排除配置到Makefile
+            cat o3_exclusions.cfg >> Makefile
+            
+            echo "全局O3优化已应用，特定组件使用O2"
+          else
+            echo "使用默认O2优化"
+          fi
+          
+          if [ "$ENABLE_GRAPHITE" = "true" ]; then
+            echo "启用Graphite优化..."
+            # 添加Graphite优化标志
+            sed -i '/^KBUILD_CFLAGS\s*+=/a KBUILD_CFLAGS += -fgraphite-identity -floop-nest-optimize -floop-parallelize-all -ftree-parallelize-loops=4' Makefile
+            echo "Graphite优化已启用"
+          fi          
 
       - name: 🔨 Build Kernel with aggressive optimizations (使用激进优化构建内核)
         env:
