@@ -483,7 +483,7 @@ jobs:
             CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
             LD=ld.lld HOSTLD=ld.lld O=out \
-            KCFLAGS="-O3 -flto=full -march=armv8.7-a -fno-strict-aliasing" \
+            KCFLAGS="-O3 -flto=full -fno-strict-aliasing" \
             LTO=full gki_defconfig 2>&1 | tee build_config.log
           
           # 编译阶段 - 启用详细输出到日志文件
@@ -492,7 +492,7 @@ jobs:
             CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
             PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
             LD=ld.lld HOSTLD=ld.lld O=out \
-            KCFLAGS="-O3 -flto=full -march=armv8.7-a -fno-strict-aliasing -DNDEBUG" \
+            KCFLAGS="-O3 -flto=full -fno-strict-aliasing -DNDEBUG" \
             LTO=full Image 2>&1 | tee build.log
           
           # 检查构建是否成功
